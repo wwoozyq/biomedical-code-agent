@@ -1,0 +1,47 @@
+{
+  "task_id": "sql_query_001",
+  "task_type": "sql_query",
+  "description": "查询患者数据库，统计不同年龄组的疾病分布情况",
+  "database": "data/sample_data/patients.db",
+  "data_sources": ["data/sample_data/patients.db"],
+  "expected_outputs": [
+    "age_group_stats.csv",
+    "disease_distribution.json"
+  ],
+  "validation_criteria": {
+    "type": "result_comparison",
+    "expected_results": [
+      {
+        "query_type": "age_group_count",
+        "min_groups": 3,
+        "total_patients": {"min": 100, "max": 10000}
+      }
+    ],
+    "expected_schema": {
+      "patients": ["patient_id", "age", "gender", "disease"],
+      "treatments": ["treatment_id", "patient_id", "treatment_type"]
+    }
+  },
+  "task_requirements": {
+    "queries": [
+      {
+        "description": "统计各年龄组患者数量",
+        "expected_columns": ["age_group", "patient_count"]
+      },
+      {
+        "description": "计算疾病分布比例",
+        "expected_columns": ["disease", "count", "percentage"]
+      }
+    ],
+    "age_groups": [
+      {"name": "青年", "min_age": 18, "max_age": 35},
+      {"name": "中年", "min_age": 36, "max_age": 60},
+      {"name": "老年", "min_age": 61, "max_age": 100}
+    ]
+  },
+  "evaluation_metrics": [
+    "queries_executed",
+    "query_success_rate",
+    "total_rows_returned"
+  ]
+}

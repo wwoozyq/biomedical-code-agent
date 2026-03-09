@@ -1,0 +1,33 @@
+{
+  "task_id": "parallel_analysis_task", 
+  "task_type": "multi_agent_parallel",
+  "description": "并行执行多个分析任务：同时进行数据分析、建模和数据库查询",
+  "data_sources": [
+    "data/sample_data/survival_data.csv",
+    "data/sample_data/clinical_features.csv", 
+    "data/sample_data/patients.db"
+  ],
+  "expected_outputs": [
+    "parallel_analysis_results.json",
+    "parallel_modeling_results.json",
+    "parallel_database_results.json",
+    "consolidated_report.json"
+  ],
+  "validation_criteria": {
+    "type": "parallel_validation",
+    "concurrent_execution": true,
+    "result_consolidation": true,
+    "performance_comparison": true
+  },
+  "collaboration_requirements": {
+    "parallel_execution": true,
+    "resource_sharing": false,
+    "independent_processing": true,
+    "result_aggregation": true
+  },
+  "performance_requirements": {
+    "max_execution_time": 120,
+    "min_success_rate": 0.75,
+    "resource_efficiency": true
+  }
+}

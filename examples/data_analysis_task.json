@@ -1,0 +1,36 @@
+{
+  "task_id": "data_analysis_001",
+  "task_type": "data_analysis",
+  "description": "分析患者生存数据，计算基础统计量并绘制Kaplan-Meier生存曲线",
+  "data_sources": ["data/sample_data/survival_data.csv"],
+  "expected_outputs": [
+    "survival_curve.png",
+    "summary_stats.json",
+    "survival_analysis.csv"
+  ],
+  "validation_criteria": {
+    "type": "assertion",
+    "checks": [
+      "file_exists",
+      "plot_generated",
+      "summary_stats"
+    ]
+  },
+  "task_requirements": {
+    "analysis_type": "survival_analysis",
+    "plot_requirements": {
+      "type": "kaplan_meier",
+      "format": "png",
+      "dpi": 300
+    },
+    "statistical_tests": [
+      "log_rank_test",
+      "median_survival"
+    ]
+  },
+  "evaluation_metrics": [
+    "files_generated",
+    "data_completeness",
+    "plots_generated"
+  ]
+}

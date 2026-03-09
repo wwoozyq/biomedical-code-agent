@@ -1,0 +1,73 @@
+# 智能体配置文件
+
+# 基础配置
+agent:
+  name: "BiomedicalCodeAgent"
+  version: "1.0.0"
+  max_iterations: 10
+  timeout_seconds: 300
+  
+# 执行环境配置
+execution:
+  sandbox_dir: "./sandbox"
+  data_dir: "./data"
+  output_dir: "./output"
+  log_dir: "./logs"
+  
+# 动作空间配置
+actions:
+  request_info:
+    enabled: true
+    timeout: 30
+    supported_formats: ["csv", "json", "sqlite", "db"]
+    
+  terminal:
+    enabled: true
+    timeout: 30
+    allowed_commands: ["pip", "ls", "cat", "head", "tail", "wc"]
+    restricted_commands: ["rm", "sudo", "chmod"]
+    
+  code_execution:
+    enabled: true
+    timeout: 60
+    supported_languages: ["python", "sql"]
+    python:
+      allowed_imports: 
+        - "pandas"
+        - "numpy"
+        - "matplotlib"
+        - "seaborn"
+        - "sklearn"
+        - "scipy"
+        - "lifelines"
+        - "sqlite3"
+      restricted_imports: ["os.system", "subprocess", "eval", "exec"]
+      
+  debugging:
+    enabled: true
+    max_suggestions: 5
+    
+# 任务配置
+tasks:
+  data_analysis:
+    default_timeout: 300
+    required_outputs: ["summary_stats", "visualization"]
+    validation_methods: ["file_exists", "assertion", "statistical_test"]
+    
+  prediction:
+    default_timeout: 600
+    required_outputs: ["predictions", "metrics"]
+    validation_methods: ["prediction_file", "metrics_threshold", "model_file"]
+    
+  sql_query:
+    default_timeout: 120
+    required_outputs: ["query_results"]
+    validation_methods: ["result_comparison", "schema_check", "row_count"]
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file_rotation: true
+  max_file_size: "10MB"
+  backup_count: 5

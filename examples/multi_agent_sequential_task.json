@@ -1,0 +1,39 @@
+{
+  "task_id": "sequential_pipeline_analysis",
+  "task_type": "multi_agent_sequential",
+  "description": "按顺序执行数据分析流水线：数据探索 → 建模 → 结果验证",
+  "data_sources": [
+    "data/sample_data/clinical_features.csv"
+  ],
+  "expected_outputs": [
+    "pipeline_step1_analysis.json",
+    "pipeline_step2_model.pkl",
+    "pipeline_step3_validation.json",
+    "final_pipeline_report.json"
+  ],
+  "validation_criteria": {
+    "type": "sequential_validation",
+    "pipeline_steps": [
+      {
+        "step": 1,
+        "agent": "data_analyst",
+        "required_outputs": ["data_summary", "visualizations"]
+      },
+      {
+        "step": 2, 
+        "agent": "modeling_expert",
+        "required_outputs": ["trained_model", "predictions"]
+      },
+      {
+        "step": 3,
+        "agent": "qa_expert", 
+        "required_outputs": ["validation_report", "quality_score"]
+      }
+    ]
+  },
+  "collaboration_requirements": {
+    "sequential_execution": true,
+    "data_handoff": true,
+    "step_validation": true
+  }
+}

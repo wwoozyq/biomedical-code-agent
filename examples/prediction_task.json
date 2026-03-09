@@ -1,0 +1,41 @@
+{
+  "task_id": "prediction_001",
+  "task_type": "prediction",
+  "description": "基于患者临床特征构建疾病预测模型，输出预测结果和性能指标",
+  "data_sources": ["data/sample_data/clinical_features.csv"],
+  "expected_outputs": [
+    "predictions.csv",
+    "model_metrics.json",
+    "feature_importance.png"
+  ],
+  "validation_criteria": {
+    "type": "metrics_threshold",
+    "thresholds": {
+      "accuracy": 0.75,
+      "f1_score": 0.70,
+      "precision": 0.70,
+      "recall": 0.65
+    },
+    "required_columns": ["patient_id", "predicted", "probability"]
+  },
+  "task_requirements": {
+    "model_type": "classification",
+    "target_column": "disease_status",
+    "test_size": 0.2,
+    "cross_validation": {
+      "enabled": true,
+      "folds": 5
+    },
+    "feature_selection": {
+      "enabled": true,
+      "method": "recursive_feature_elimination"
+    }
+  },
+  "evaluation_metrics": [
+    "accuracy",
+    "precision",
+    "recall",
+    "f1_score",
+    "prediction_count"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "task_id": "comprehensive_biomedical_analysis",
+  "task_type": "multi_agent_collaboration",
+  "description": "对生物医学数据进行全面分析，包括数据探索、预测建模、数据库查询和质量保证",
+  "data_sources": [
+    "data/sample_data/survival_data.csv",
+    "data/sample_data/clinical_features.csv",
+    "data/sample_data/patients.db"
+  ],
+  "expected_outputs": [
+    "comprehensive_analysis_report.json",
+    "correlation_heatmap.png",
+    "predictions.csv",
+    "database_summary.json",
+    "quality_assessment.json"
+  ],
+  "validation_criteria": {
+    "type": "multi_agent_validation",
+    "required_agents": ["data_analyst", "modeling_expert", "sql_expert", "qa_expert"],
+    "quality_threshold": 0.8,
+    "completeness_threshold": 0.9
+  },
+  "collaboration_requirements": {
+    "data_sharing": true,
+    "result_validation": true,
+    "cross_validation": true,
+    "quality_assurance": true
+  },
+  "task_priorities": {
+    "data_analysis": "high",
+    "modeling": "high", 
+    "database_query": "medium",
+    "quality_check": "critical"
+  }
+}
