@@ -6,42 +6,21 @@ matplotlib>=3.4.0
 seaborn>=0.11.0
 scipy>=1.7.0
 
+# LLM API（阿里通义千问，OpenAI 兼容）
+openai>=1.0.0
+
 # 数据库支持
-sqlite3
 sqlalchemy>=1.4.0
 
 # 生存分析
 lifelines>=0.27.0
 
-# 机器学习扩展
-xgboost>=1.5.0
-lightgbm>=3.3.0
-
-# 深度学习（可选）
-torch>=1.9.0
-transformers>=4.12.0
-
-# 代码执行和沙箱
-jupyter>=1.0.0
-ipython>=7.25.0
-
 # 配置管理
 pyyaml>=5.4.0
-configparser>=5.0.0
 
 # 日志和监控
-loguru>=0.5.0
 tqdm>=4.62.0
 
-# 测试
-pytest>=6.2.0
-pytest-cov>=2.12.0
-
-# 可视化界面（进阶功能）
+# 可视化界面（可选）
 streamlit>=1.2.0
-gradio>=2.3.0
-
-# 工具类
-click>=8.0.0
-pathlib2>=2.3.0
-jsonschema>=3.2.0
+plotly>=5.0.0

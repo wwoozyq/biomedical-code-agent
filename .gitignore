@@ -112,11 +112,19 @@ logs/
 output/
 multi_agent_output/
 sandbox/
+benchmark_output*/
 *.png
 *.csv
 *.db
 !data/sample_data/*.csv
 !data/sample_data/*.db
+
+# 经验池备份（experience pool 本体保留）
+experience_pool_backup*.json
+
+# 消融实验中间产物
+ablation_report*.md
+selected_*.txt
 
 # IDE
 .vscode/

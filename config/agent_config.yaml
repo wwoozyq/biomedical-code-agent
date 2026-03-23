@@ -3,16 +3,29 @@
 # 基础配置
 agent:
   name: "BiomedicalCodeAgent"
-  version: "1.0.0"
-  max_iterations: 10
+  version: "2.0.0"
+  max_iterations: 8
   timeout_seconds: 300
-  
+
+# LLM 配置（阿里通义千问）
+llm:
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  model: "qwen3-max"          # 可选: qwen-turbo, qwen-plus, qwen-max, qwen3-max
+  temperature: 0.0
+  max_tokens: 4096
+  # api_key 通过环境变量 DASHSCOPE_API_KEY 设置，不要写在配置文件里
+
 # 执行环境配置
 execution:
   sandbox_dir: "./sandbox"
   data_dir: "./data"
   output_dir: "./output"
   log_dir: "./logs"
+
+# BioDSBench 配置
+biodsbench:
+  data_root: "../biodsbench_data"
+  output_dir: "./benchmark_output"
   
 # 动作空间配置
 actions:
