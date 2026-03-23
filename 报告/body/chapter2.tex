@@ -1,0 +1,21 @@
+\section{相关工作}
+
+\subsection{ReAct 范式}
+
+ReAct\cite{yao2023react} 是一种将推理（Reasoning）与行动（Acting）交织进行的 LLM 智能体范式。与传统的 Chain-of-Thought 仅在内部推理不同，ReAct 在每一步推理后执行具体动作并获取环境反馈，形成 Thought--Action--Observation 的闭环迭代。这种范式特别适合需要与外部环境交互的任务，如代码执行、数据库查询和信息检索。本项目的核心智能体即基于 ReAct 范式构建。
+
+\subsection{LLM 编码智能体}
+
+近年来，基于 LLM 的编码智能体取得了显著进展。MedAgentGym\cite{xu2025medagentgym} 提出了面向医学推理的代码智能体训练框架，通过大规模环境交互训练 LLM 的代码生成和调试能力。商业产品如 Claude Code 和 OpenAI Codex 则展示了 LLM 在实际软件开发中的应用潜力。这些工作表明，将 LLM 与代码执行环境结合，能够有效解决需要计算验证的复杂问题。
+
+\subsection{多智能体协作}
+
+多智能体系统通过分工协作提升复杂任务的处理能力。AutoGen\cite{wu2023autogen} 提出了可定制的多智能体对话框架，支持灵活的协作模式。CAMEL\cite{li2023camel} 通过角色扮演实现智能体间的自主协作。本项目参考这些架构，设计了包含协调器、专门化智能体和消息总线的多智能体系统。
+
+\subsection{反思与经验复用}
+
+Reflexion\cite{shinn2023reflexion} 提出了通过语言反馈进行自我反思的机制，使智能体能够从失败中学习。Voyager\cite{wang2023voyager} 在 Minecraft 环境中实现了技能库的持久化存储和复用。本项目借鉴这些思想，实现了经验复用池，将成功的代码模式和失败教训结构化存储，并在新任务中通过相似性检索注入上下文。
+
+\subsection{BioDSBench 数据集}
+
+BioDSBench\cite{wang2024biodsbench} 是一个面向生物医学数据科学的基准测试集，基于真实世界的临床和基因组数据构建，涵盖描述性统计、生存分析、基因组变异分析、临床特征工程等多种分析类型。每个任务包含自然语言描述、数据文件、解题提示和可执行的测试用例，能够自动化地评估智能体生成代码的正确性。本项目使用该数据集进行实验评估。

@@ -118,6 +118,7 @@ benchmark_output*/
 *.db
 !data/sample_data/*.csv
 !data/sample_data/*.db
+!报告/figure/*.png
 
 # 经验池备份（experience pool 本体保留）
 experience_pool_backup*.json
@@ -125,6 +126,19 @@ experience_pool_backup*.json
 # 消融实验中间产物
 ablation_report*.md
 selected_*.txt
+
+# LaTeX 编译产物（保留 .tex .bib .bst 源文件）
+报告/*.aux
+报告/*.bbl
+报告/*.blg
+报告/*.log
+报告/*.out
+报告/*.toc
+报告/*.fls
+报告/*.fdb_latexmk
+报告/*.synctex.gz
+报告/*.pdf
+报告/body/*.aux
 
 # IDE
 .vscode/

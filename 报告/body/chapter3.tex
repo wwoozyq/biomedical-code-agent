@@ -1,0 +1,174 @@
+\section{系统设计与实现}
+
+本章详细介绍系统的整体架构和各核心模块的设计与实现。系统整体架构如图~\ref{fig:system-arch} 所示。
+
+\begin{figure}[htbp]
+    \centering
+    % \includegraphics[width=0.9\textwidth]{figure/system_architecture.png}
+    \fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}系统整体架构图（待插入）\vspace{3cm}}}
+    \caption{系统整体架构。用户输入任务描述和数据资源，经任务解析后分发至单智能体或多智能体模式处理，最终输出执行结果。}
+    \label{fig:system-arch}
+\end{figure}
+
+\subsection{ReAct 智能体核心}
+
+\subsubsection{Thought--Action--Observation 循环}
+
+ReAct 智能体是系统的核心组件，实现了完整的推理--行动--观测闭环。如图~\ref{fig:react-loop} 所示，智能体在每一轮迭代中执行以下步骤：
+
+\begin{enumerate}
+    \item \textbf{Thought（推理）}：LLM 基于当前上下文（任务描述、历史观测、经验提示）进行推理，分析当前状态并规划下一步操作。
+    \item \textbf{Action（行动）}：从推理结果中解析出 Python 代码块，在持久化的执行命名空间中运行。
+    \item \textbf{Observation（观测）}：捕获代码执行的标准输出和错误信息，作为下一轮推理的输入。
+\end{enumerate}
+
+\begin{figure}[htbp]
+    \centering
+    % \includegraphics[width=0.85\textwidth]{figure/react_loop.png}
+    \fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}ReAct 循环流程图（待插入）\vspace{3cm}}}
+    \caption{ReAct 智能体的 Thought--Action--Observation 迭代循环。每步执行后自动运行测试用例进行主动验证，通过则提前终止。}
+    \label{fig:react-loop}
+\end{figure}
+
+智能体采用持久化执行命名空间（\texttt{\_exec\_namespace}），使得前序步骤定义的变量和导入的库在后续步骤中仍然可用，模拟了真实的交互式编程环境。
+
+\subsubsection{主动验证机制}
+
+与被动等待智能体声明"任务完成"不同，本系统在每一步代码成功执行后，自动运行任务附带的测试用例（\texttt{test\_cases}）。测试用例由一组 \texttt{assert} 断言组成，验证智能体生成的变量是否满足预期。若所有断言通过，智能体立即终止并标记任务成功；若智能体声称完成但验证未通过，系统将失败详情反馈给 LLM，要求其修正代码。
+
+\subsubsection{渐进式提示策略}
+
+为提高智能体在有限迭代次数内的成功率，系统根据当前步骤阶段动态调整反馈提示：
+\begin{itemize}
+    \item 初始阶段：引导智能体加载数据并开始处理任务逻辑。
+    \item 中间阶段：提示智能体推进核心逻辑并尝试验证。
+    \item 最后 2 步：发出紧迫提醒，要求直接写出完整解题代码。
+\end{itemize}
+
+\subsection{动作空间}
+
+智能体的动作空间 $\mathcal{A}$ 由四类基础操作组成：
+
+\begin{table}[htbp]
+    \centering
+    \caption{智能体动作空间定义}
+    \label{tab:action-space}
+    \begin{tabular}{lll}
+        \toprule
+        动作类型 & 标识符 & 功能描述 \\
+        \midrule
+        数据检索 & \texttt{request\_info} & 加载 CSV/数据库文件，获取 schema 和样本数据 \\
+        终端操作 & \texttt{terminal} & 在沙箱中执行 shell 命令，管理依赖和文件 \\
+        代码执行 & \texttt{code\_execution} & 在隔离的 Python 环境中运行代码 \\
+        调试辅助 & \texttt{debugging} & 解析错误信息，生成自然语言调试建议 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+在实际的 ReAct 循环中，智能体主要通过 \texttt{code\_execution} 动作与环境交互。LLM 生成的 Python 代码在持久命名空间中执行，标准输出通过 \texttt{io.StringIO} 重定向捕获，异常通过 \texttt{traceback} 模块格式化后反馈给 LLM。
+
+\subsection{安全沙箱}
+
+直接使用 Python 的 \texttt{exec} 函数执行 LLM 生成的代码存在安全风险：恶意或错误的代码可能删除文件、执行系统命令或导致主进程崩溃。为此，系统实现了基于子进程隔离的安全沙箱（\texttt{Sandbox}），提供以下五层防护：
+
+\begin{enumerate}
+    \item \textbf{子进程隔离}：每段代码在独立的 \texttt{multiprocessing.Process} 中执行，代码崩溃、段错误或无限循环不会影响主进程。
+    \item \textbf{超时控制}：子进程执行超过预设时限（默认 60 秒）后自动被 \texttt{kill}，防止死循环或长时间阻塞。
+    \item \textbf{危险操作拦截}：执行前对代码进行静态正则检查，拦截 \texttt{os.system}、\texttt{subprocess}、\texttt{shutil.rmtree}、写模式 \texttt{open} 等危险操作。
+    \item \textbf{命名空间持久化}：通过 \texttt{pickle} 序列化在步骤间传递变量，保持交互式编程体验。不可序列化的对象（如模块）通过自动重新 \texttt{import} 恢复。
+    \item \textbf{向后兼容}：沙箱模式通过 \texttt{use\_sandbox=True} 参数或命令行 \texttt{--sandbox} 标志启用，默认关闭以保持与原有执行逻辑的兼容性。
+\end{enumerate}
+
+沙箱的核心执行流程为：静态安全检查 $\rightarrow$ 注入历史 import 语句 $\rightarrow$ 启动子进程执行 $\rightarrow$ 超时监控 $\rightarrow$ 通过队列回收结果和更新后的命名空间。
+
+\subsection{反思与经验复用池}
+
+经验复用池是本系统的核心进阶特性之一，实现了跨任务的长期记忆机制。如图~\ref{fig:experience-pool} 所示，该机制包含经验存储、反思引擎和经验检索三个子模块。
+
+\begin{figure}[htbp]
+    \centering
+    % \includegraphics[width=0.85\textwidth]{figure/experience_pool.png}
+    \fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}经验复用池架构图（待插入）\vspace{3cm}}}
+    \caption{反思与经验复用池架构。任务完成后触发 LLM 反思，提取结构化经验存入 JSON 文件；新任务开始前检索相似经验注入 prompt。}
+    \label{fig:experience-pool}
+\end{figure}
+
+\subsubsection{经验数据结构}
+
+每条经验记录包含以下字段：任务标识（\texttt{task\_id}）、任务描述（\texttt{query}）、分析类型（\texttt{analysis\_types}）、是否成功（\texttt{success}）、最终代码（\texttt{final\_code}）、反思总结（\texttt{reflection}）、关键代码模式（\texttt{key\_patterns}）和使用步骤数（\texttt{steps\_used}）。经验以 JSON 格式持久化存储，支持自动备份轮转（最多保留 3 份备份）和容量管理（上限 500 条，优先淘汰最旧的失败经验）。
+
+\subsubsection{反思引擎}
+
+任务结束后（无论成功或失败），系统调用 LLM 进行结构化反思。反思引擎将任务描述、执行结果、最终代码和错误信息组织为 prompt，要求 LLM 输出 JSON 格式的反思结果，包括：解题策略总结、关键代码模式、犯过的错误、学到的教训和改进建议。
+
+\subsubsection{经验检索与注入}
+
+新任务开始时，系统按以下策略检索相似经验：
+\begin{enumerate}
+    \item 按 \texttt{analysis\_types} 匹配候选经验（通过倒排索引加速）。
+    \item 按任务描述的关键词重叠度排序。
+    \item 取 top-2 条成功经验作为 few-shot 示例注入初始 prompt。
+    \item 额外检索 1 条相关失败经验，注入"避免以下错误"提示。
+\end{enumerate}
+
+\subsection{多智能体协作系统}
+
+多智能体协作系统通过分工协作提升复杂任务的处理能力。如图~\ref{fig:multi-agent} 所示，系统包含协调器、专门化智能体和消息总线三个核心组件。
+
+\begin{figure}[htbp]
+    \centering
+    % \includegraphics[width=0.9\textwidth]{figure/multi_agent.png}
+    \fbox{\parbox{0.85\textwidth}{\centering\vspace{3cm}多智能体协作架构图（待插入）\vspace{3cm}}}
+    \caption{多智能体协作系统架构。协调器根据任务特征选择协作模式，专门化智能体通过消息总线通信，QA 智能体负责最终质量保证。}
+    \label{fig:multi-agent}
+\end{figure}
+
+\subsubsection{专门化智能体}
+
+系统包含四类专门化智能体，均继承自 \texttt{BaseSpecializedAgent} 基类：
+
+\begin{table}[htbp]
+    \centering
+    \caption{专门化智能体及其能力}
+    \label{tab:agents}
+    \begin{tabular}{llp{7cm}}
+        \toprule
+        智能体 & 专长领域 & 核心能力 \\
+        \midrule
+        DataAnalystAgent & 数据分析 & 数据清洗、统计分析、相关性分析、数据可视化 \\
+        ModelingAgent & 机器学习 & 特征工程、模型训练、交叉验证、性能评估 \\
+        SQLExpertAgent & 数据库查询 & SQL 生成、查询优化、数据提取、聚合分析 \\
+        QualityAssuranceAgent & 质量保证 & 结果验证、数据质量检查、一致性检查 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+每个智能体通过 \texttt{can\_handle\_task} 方法基于关键词匹配判断是否能处理给定任务，通过 \texttt{execute\_task} 方法执行具体的分析逻辑。
+
+\subsubsection{消息总线与通信协议}
+
+智能体间通过消息总线（MessageBus）进行异步通信。消息总线采用发布--订阅模式，支持点对点消息和广播消息。通信协议定义了六种消息类型：任务请求、任务响应、数据共享、协调指令、错误报告和状态更新。每条消息包含发送者、接收者、消息类型、优先级和内容载荷。
+
+\subsubsection{协作模式}
+
+系统实现了四种协作模式：
+
+\begin{itemize}
+    \item \textbf{顺序模式（Sequential）}：智能体按预定顺序依次执行，前一个智能体的输出作为后一个的输入上下文。适用于存在数据依赖的流水线任务。
+    \item \textbf{并行模式（Parallel）}：多个智能体通过线程池并发执行同一任务，各自独立产出结果后汇总。适用于可分解的独立子任务。
+    \item \textbf{分层模式（Hierarchical）}：由协调者智能体（默认为 DataAnalystAgent）先分析任务并制定计划，再将子任务分配给其他智能体执行，最后整合结果。
+    \item \textbf{自适应模式（Adaptive）}：根据任务复杂度自动选择最优协作方式。分析任务是否存在数据依赖、是否计算密集等特征，动态切换顺序或并行模式。
+\end{itemize}
+
+\subsection{Web 可视化界面}
+
+系统基于 Streamlit 框架构建了可视化 Web 监控面板，提供以下功能：
+\begin{itemize}
+    \item 智能体类型选择（单智能体 / 多智能体协作）。
+    \item 任务配置（预设模板或自定义任务描述）。
+    \item 协作模式选择（自适应、顺序、并行、分层）。
+    \item 实时执行进度监控和结果展示。
+    \item 执行报告导出。
+\end{itemize}
+
+用户通过 \texttt{python run\_web\_interface.py} 启动 Web 界面，在浏览器中即可完成任务配置、执行监控和结果查看的全流程操作。

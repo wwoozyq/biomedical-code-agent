@@ -1,0 +1,251 @@
+\section{实验与分析}
+
+\subsection{实验设置}
+
+\subsubsection{数据集}
+
+本项目使用 BioDSBench\cite{wang2024biodsbench} 数据集进行实验评估。该数据集共包含 108 道生物医学数据分析任务，涵盖 19 种分析类型，包括描述性统计、生存分析、基因组变异分析、临床特征工程、数据整合与转换、治疗响应分析等。每道任务包含自然语言描述、关联的 CSV 数据文件、解题提示（CoT instructions）和可执行的测试用例（assert 断言）。
+
+\subsubsection{任务采样}
+
+为在有限的 API 调用预算内进行充分的消融实验，我们采用分层抽样策略从 108 道任务中选取 30 道。抽样过程确保覆盖全部 19 种分析类型，每种类型至少选取 1 道任务，剩余名额按各类型的任务数量比例分配。最终选取的 30 道任务分布在 10 个不同的研究数据集（study）上。
+
+\subsubsection{实验配置}
+
+消融实验设置三组对照，如表~\ref{tab:exp-config} 所示。所有实验组的最大迭代次数均设为 8 步。
+
+\begin{table}[htbp]
+    \centering
+    \caption{消融实验配置}
+    \label{tab:exp-config}
+    \begin{tabular}{lccc}
+        \toprule
+        实验组 & 模型 & 经验池 & 反思机制 \\
+        \midrule
+        qwen3-max (full) & qwen3-max & \checkmark & \checkmark \\
+        qwen-turbo + exp & qwen-turbo & \checkmark & \checkmark \\
+        qwen-turbo (baseline) & qwen-turbo & $\times$ & $\times$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+其中 qwen3-max 和 qwen-turbo 均为阿里通义千问系列模型，通过 DashScope API 的 OpenAI 兼容接口调用。qwen3-max 是万亿参数级旗舰模型，qwen-turbo 是轻量级快速推理模型。
+
+\subsection{总体性能对比}
+
+三组实验的总体性能如表~\ref{tab:overall} 所示。
+
+\begin{table}[htbp]
+    \centering
+    \caption{三组消融实验总体性能对比（30 道任务）}
+    \label{tab:overall}
+    \begin{tabular}{lccccc}
+        \toprule
+        实验组 & 通过数 & 通过率 & 平均步骤数 & 平均耗时(s) & 总耗时(s) \\
+        \midrule
+        qwen3-max (full) & 27 & 90.0\% & 3.20 & 66.9 & 2008.3 \\
+        qwen-turbo + exp & 20 & 66.7\% & 5.17 & 31.1 & 933.5 \\
+        qwen-turbo (baseline) & 17 & 56.7\% & 5.40 & 27.2 & 815.2 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{经验池增益分析}
+
+在相同模型（qwen-turbo）下，启用经验池+反思机制与不启用的对比结果如表~\ref{tab:exp-gain} 所示。
+
+\begin{table}[htbp]
+    \centering
+    \caption{经验池增益分析（qwen-turbo 模型）}
+    \label{tab:exp-gain}
+    \begin{tabular}{lccc}
+        \toprule
+        指标 & 有经验池 & 无经验池 & 差异 \\
+        \midrule
+        通过率 & 66.7\% & 56.7\% & +10.0\% \\
+        平均步骤数 & 5.17 & 5.40 & $-$0.23 \\
+        平均耗时(s) & 31.1 & 27.2 & +3.9 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+经验池+反思机制使 qwen-turbo 的通过率从 56.7\% 提升至 66.7\%，绝对提升 10 个百分点。同时平均步骤数略有减少（5.40 $\rightarrow$ 5.17），说明经验注入帮助智能体更快地找到正确的解题路径。平均耗时略有增加（+3.9s），这是因为经验检索和反思过程引入了额外的 LLM 调用开销。
+
+从逐题对比来看，经验池在以下场景中表现出显著优势：
+\begin{itemize}
+    \item \textbf{独占通过}：有 3 道任务仅在启用经验池时通过（30742119\_1、30742119\_3、\allowbreak 30867592\_9），说明经验注入提供了关键的解题线索。
+    \item \textbf{步骤减少}：在共同通过的任务中，启用经验池的平均步骤数更少，表明 few-shot 经验帮助智能体避免了不必要的试错。
+\end{itemize}
+
+\subsection{模型能力对比}
+
+在相同配置（经验池+反思）下，qwen3-max 与 qwen-turbo 的对比揭示了模型能力对任务通过率的显著影响：
+
+\begin{itemize}
+    \item qwen3-max 通过率 90.0\%，显著高于 qwen-turbo 的 66.7\%，差距达 23.3 个百分点。
+    \item qwen3-max 平均仅需 3.20 步即可完成任务，而 qwen-turbo 需要 5.17 步，说明强模型的代码生成质量更高，首次尝试的成功率更高。
+    \item qwen3-max 的平均耗时（66.9s）高于 qwen-turbo（31.1s），这是因为 qwen3-max 作为万亿参数模型，单次推理延迟更高。
+    \item 30 道任务中仅有 3 道三组实验均未通过，这些任务涉及复杂的基因组变异与生存分析的交叉分析，属于高难度任务。
+\end{itemize}
+
+\subsection{失败类型统计}
+
+对失败任务的错误类型进行分类统计，结果如表~\ref{tab:fail-types} 所示。
+
+\begin{table}[htbp]
+    \centering
+    \caption{失败类型统计}
+    \label{tab:fail-types}
+    \begin{tabular}{lccc}
+        \toprule
+        失败类型 & qwen3-max & turbo+exp & turbo baseline \\
+        \midrule
+        验证断言失败（逻辑错误） & 3 & 6 & 8 \\
+        值错误（ValueError） & 0 & 2 & 2 \\
+        变量未定义（NameError） & 0 & 1 & 1 \\
+        列名/键错误（KeyError） & 0 & 1 & 0 \\
+        其他运行时错误 & 0 & 0 & 2 \\
+        \midrule
+        失败总数 & 3 & 10 & 13 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+可以看到，最主要的失败类型是"验证断言失败"，即智能体生成的代码能够正常运行，但计算结果与标准答案不一致。这类错误通常源于对任务描述的理解偏差（如筛选条件的边界判定）或数据处理逻辑的细微差异。运行时错误（NameError、ValueError 等）占比较小，说明智能体的代码生成质量总体较好，主要瓶颈在于语义理解而非语法正确性。
+
+\subsection{按分析类型的性能分布}
+
+表~\ref{tab:by-type} 展示了各分析类型上的通过率对比（选取代表性类型）。
+
+\begin{table}[htbp]
+    \centering
+    \caption{代表性分析类型的通过率对比}
+    \label{tab:by-type}
+    \begin{tabular}{lccc}
+        \toprule
+        分析类型 & qwen3-max & turbo+exp & turbo baseline \\
+        \midrule
+        Descriptive Statistics & 3/3 (100\%) & 2/3 (67\%) & 2/3 (67\%) \\
+        Survival Outcome Analysis & 4/4 (100\%) & 4/4 (100\%) & 4/4 (100\%) \\
+        Genomic Alteration Profiling & 4/4 (100\%) & 2/4 (50\%) & 2/4 (50\%) \\
+        Clinical Feature Engineering & 0/1 (0\%) & 1/1 (100\%) & 0/1 (0\%) \\
+        Treatment Response Vis. & 2/2 (100\%) & 2/2 (100\%) & 1/2 (50\%) \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+可以观察到：
+\begin{itemize}
+    \item 纯生存分析任务三组均达到 100\% 通过率，说明该类型任务的解题模式较为固定，智能体容易掌握。
+    \item 基因组变异分析任务中，qwen3-max 达到 100\% 而 qwen-turbo 仅 50\%，说明该类型需要更强的代码推理能力。
+    \item 经验池在治疗响应可视化类型上将 qwen-turbo 的通过率从 50\% 提升至 100\%，体现了经验复用对特定任务类型的显著增益。
+\end{itemize}
+
+\subsection{案例分析}
+
+以任务 30867592\_9（生存分析 + 治疗响应）为例，展示经验池的作用机制。该任务要求从临床数据中筛选特定条件的患者并进行生存分析。
+
+在无经验池的 baseline 组中，qwen-turbo 在 8 步迭代内未能通过验证，主要卡在数据类型转换和列名匹配上。而在启用经验池的实验组中，系统检索到了一条来自同类型任务（30867592\_1）的成功经验，其中包含了正确的数据加载和类型转换模式。智能体参考该经验，仅用 3 步即完成任务，耗时从 45.8s 降至 15.9s。
+
+这一案例清晰地展示了经验复用池的核心价值：通过跨任务的知识迁移，帮助智能体避免重复犯错，显著提升解题效率。
+
+\subsection{决策轨迹示例}
+
+下面展示任务 25303977\_1（基因组变异分析）的完整决策轨迹。该任务要求从突变数据中识别基因替换突变类型并统计频率。智能体在 2 步内完成任务，第一步探索数据结构，第二步生成完整解法。
+
+\begin{mdframed}[linewidth=0.8pt, roundcorner=5pt, backgroundcolor=gray!5,
+  innertopmargin=8pt, innerbottommargin=8pt,
+  skipabove=10pt, skipbelow=10pt]
+
+\textbf{任务：} 分析突变数据中的基因替换类型（如 A$>$C 表示 A 被 C 替换），统计出现频率最高的 5 种替换类型。
+
+\vspace{4pt}
+\hrule
+\vspace{6pt}
+
+\textbf{Step 1 \quad Thought:}
+
+{\small 我需要分析突变数据来确定替换类型。数据中有 \texttt{Reference\_Allele}、\texttt{Tumor\_Seq\_Allele1} 和 \texttt{Tumor\_Seq\_Allele2} 三列。从验证条件可知，预期的 top 替换包括 C$>$T (43637)、G$>$A (42492) 和 GG$>$AA (2796)，说明需要同时处理 SNP 和 DNP 类型。先加载数据探索结构。}
+
+\vspace{4pt}
+\textbf{Step 1 \quad Action:}
+\begin{lstlisting}[language=Python, basicstyle=\scriptsize\ttfamily,
+  numbers=none, xleftmargin=4pt, framexleftmargin=0pt,
+  breaklines=true, breakatwhitespace=true, frame=none,
+  backgroundcolor={}]
+import pandas as pd
+data_mutations = pd.read_csv("data_mutations.csv")
+print(data_mutations['Variant_Type'].value_counts())
+print(data_mutations[['Reference_Allele',
+    'Tumor_Seq_Allele1','Tumor_Seq_Allele2']].head())
+\end{lstlisting}
+
+\vspace{2pt}
+\textbf{Step 1 \quad Observation:}
+
+{\small\ttfamily
+Variant\_Type: SNP 100405, DNP 6341, DEL 993, INS 295 \\
+\begin{tabular}{lll}
+Reference\_Allele & Tumor\_Seq\_Allele1 & Tumor\_Seq\_Allele2 \\
+C & C & T \\
+G & G & A \\
+\end{tabular}
+}
+
+\vspace{4pt}
+\hrule
+\vspace{6pt}
+
+\textbf{Step 2 \quad Thought:}
+
+{\small 数据以 SNP 为主（100405 条），Allele1 通常等于 Reference（杂合突变），Allele2 是实际突变。对于 DNP 类型，需要整体比较（如 GG$>$AA）。我将逐行比较 Reference 与两个 Tumor Allele，生成替换类型字符串，然后统计频率。}
+
+\vspace{4pt}
+\textbf{Step 2 \quad Action:}
+\begin{lstlisting}[language=Python, basicstyle=\scriptsize\ttfamily,
+  numbers=none, xleftmargin=4pt, framexleftmargin=0pt,
+  breaklines=true, breakatwhitespace=true, frame=none,
+  backgroundcolor={}]
+def get_substitution_types(row):
+    ref = row['Reference_Allele']
+    subs = []
+    for allele in [row['Tumor_Seq_Allele1'],
+                   row['Tumor_Seq_Allele2']]:
+        if ref != allele and pd.notna(allele):
+            subs.append(f"{ref}>{allele}")
+    return subs
+
+data_mutations['sub_type'] = data_mutations.apply(
+    get_substitution_types, axis=1)
+exploded = data_mutations.explode('sub_type').dropna(
+    subset=['sub_type'])
+most_frequent_substitution = exploded['sub_type'] \
+    .value_counts().head(5).reset_index()
+most_frequent_substitution.columns = [
+    'substitution_type', 'count']
+print(most_frequent_substitution)
+\end{lstlisting}
+
+\vspace{2pt}
+\textbf{Step 2 \quad Observation:}
+
+{\small\ttfamily
+\begin{tabular}{lr}
+substitution\_type & count \\
+C$>$T & 43637 \\
+G$>$A & 42492 \\
+GG$>$AA & 2796 \\
+CC$>$TT & 2775 \\
+T$>$C & 1800 \\
+\end{tabular}
+}
+
+\vspace{4pt}
+\hrule
+\vspace{6pt}
+
+\textbf{验证结果：} \checkmark{} 全部 4 条断言通过 \quad | \quad 总耗时 39.4s
+
+\end{mdframed}
+
+\noindent 上述轨迹展示了任务 25303977\_1 的完整决策过程。智能体在第一步探索数据结构，第二步生成完整解法并一次通过验证。
