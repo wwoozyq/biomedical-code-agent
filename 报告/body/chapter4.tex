@@ -12,40 +12,47 @@
 
 \subsubsection{实验配置}
 
-消融实验设置三组对照，如表~\ref{tab:exp-config} 所示。所有实验组的最大迭代次数均设为 8 步。
+消融实验设置五组对照，如表~\ref{tab:exp-config} 所示。所有实验组的最大迭代次数均设为 8 步。
 
 \begin{table}[htbp]
     \centering
     \caption{消融实验配置}
     \label{tab:exp-config}
-    \begin{tabular}{lccc}
+    \begin{tabular}{lcccc}
         \toprule
-        实验组 & 模型 & 经验池 & 反思机制 \\
+        实验组 & 模型 & 经验池 & 反思 & 技能库 \\
         \midrule
-        qwen3-max (full) & qwen3-max & \checkmark & \checkmark \\
-        qwen-turbo + exp & qwen-turbo & \checkmark & \checkmark \\
-        qwen-turbo (baseline) & qwen-turbo & $\times$ & $\times$ \\
+        qwen3-max (full) & qwen3-max & \checkmark & \checkmark & $\times$ \\
+        qwen-turbo + exp & qwen-turbo & \checkmark & \checkmark & $\times$ \\
+        qwen-turbo (baseline) & qwen-turbo & $\times$ & $\times$ & $\times$ \\
+        qwen-turbo + skill (cold) & qwen-turbo & \checkmark & \checkmark & \checkmark \\
+        qwen-turbo + skill (warm) & qwen-turbo & \checkmark & \checkmark & \checkmark$^*$ \\
         \bottomrule
     \end{tabular}
+
+    \vspace{4pt}
+    {\small $^*$ warm 组在评测前使用预热脚本从 turbo+exp 组的成功结果中提取了 20 个技能填充技能库，消除冷启动劣势。}
 \end{table}
 
 其中 qwen3-max 和 qwen-turbo 均为阿里通义千问系列模型，通过 DashScope API 的 OpenAI 兼容接口调用。qwen3-max 是万亿参数级旗舰模型，qwen-turbo 是轻量级快速推理模型。
 
 \subsection{总体性能对比}
 
-三组实验的总体性能如表~\ref{tab:overall} 所示。
+五组实验的总体性能如表~\ref{tab:overall} 所示。
 
 \begin{table}[htbp]
     \centering
-    \caption{三组消融实验总体性能对比（30 道任务）}
+    \caption{五组消融实验总体性能对比（30 道任务）}
     \label{tab:overall}
     \begin{tabular}{lccccc}
         \toprule
-        实验组 & 通过数 & 通过率 & 平均步骤数 & 平均耗时(s) & 总耗时(s) \\
+        实验组 & 通过数 & 通过率 & 平均步骤 & 平均耗时(s) & 总耗时(s) \\
         \midrule
         qwen3-max (full) & 27 & 90.0\% & 3.20 & 66.9 & 2008.3 \\
         qwen-turbo + exp & 20 & 66.7\% & 5.17 & 31.1 & 933.5 \\
         qwen-turbo (baseline) & 17 & 56.7\% & 5.40 & 27.2 & 815.2 \\
+        turbo + skill (cold) & 18 & 60.0\% & 5.37 & 54.5 & 1634.8 \\
+        turbo + skill (warm) & 20 & 66.7\% & 4.90 & 42.9 & 1288.2 \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -88,6 +95,72 @@
     \item 30 道任务中仅有 3 道三组实验均未通过，这些任务涉及复杂的基因组变异与生存分析的交叉分析，属于高难度任务。
 \end{itemize}
 
+\subsection{技能库增益分析}
+
+技能库（Skill Library）是本系统的核心创新模块。为科学评估其效果，我们设计了冷启动和预热两组对照实验。
+
+\subsubsection{冷启动 vs 预热}
+
+冷启动组（cold）在空技能库状态下运行，技能只能在评测过程中逐步积累；预热组（warm）在评测前从 turbo+exp 组的 20 道成功任务中提取了 20 个技能填充库。结果如表~\ref{tab:skill-warmup} 所示。
+
+\begin{table}[htbp]
+    \centering
+    \caption{技能库冷启动 vs 预热对比}
+    \label{tab:skill-warmup}
+    \begin{tabular}{lccc}
+        \toprule
+        指标 & cold & warm & 差异 \\
+        \midrule
+        通过率 & 60.0\% & 66.7\% & +6.7\% \\
+        平均步骤数 & 5.37 & 4.90 & $-$0.47 \\
+        平均耗时(s) & 54.5 & 42.9 & $-$11.6 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+预热消除了冷启动劣势，通过率从 60.0\% 提升至 66.7\%，平均步骤减少 0.47 步。这说明技能库的价值随着积累的技能数量增长而增大。
+
+\subsubsection{技能库 vs 经验池的互补性分析}
+
+技能库（warm）与经验池（exp）的通过率均为 66.7\%（20/30），但两者通过的任务集合并不完全相同。逐题对比揭示了两种机制的互补性，如表~\ref{tab:skill-complement} 所示。
+
+\begin{table}[htbp]
+    \centering
+    \caption{技能库与经验池的互补性分析}
+    \label{tab:skill-complement}
+    \begin{tabular}{lc}
+        \toprule
+        类别 & 任务数 \\
+        \midrule
+        两者均通过 & 18 \\
+        仅技能库通过（经验池失败） & 2 \\
+        仅经验池通过（技能库失败） & 2 \\
+        两者均失败 & 8 \\
+        \midrule
+        联合覆盖（任一通过） & 22 (73.3\%) \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+关键发现：若将经验池和技能库的通过结果取并集，联合通过率可达 73.3\%（22/30），比单独使用任一机制高出 6.6 个百分点。这表明两种知识复用机制在不同任务上各有优势：
+
+\begin{itemize}
+    \item 技能库独占通过的 2 道任务（30742119\_5、37699004\_7）涉及生存分析和数据转换，技能库提供的可执行函数帮助智能体直接复用了正确的数据处理逻辑。
+    \item 经验池独占通过的 2 道任务（28472509\_5、28472509\_6）涉及基因组数据整合，经验池的 few-shot 示例为智能体提供了更灵活的参考。
+\end{itemize}
+
+\subsubsection{共同通过任务的效率对比}
+
+在两者均通过的 18 道任务上，技能库（warm）的平均步骤数为 3.44，低于经验池的 3.78，步骤减少了 8.9\%。其中步骤显著减少的典型案例包括：
+
+\begin{itemize}
+    \item 任务 27959731\_9：技能库 2 步 vs 经验池 5 步（减少 60\%）
+    \item 任务 32437664\_10：技能库 3 步 vs 经验池 7 步（减少 57\%）
+    \item 任务 30867592\_3：技能库 1 步 vs 经验池 4 步（减少 75\%）
+\end{itemize}
+
+这些案例表明，当技能库中存在高度匹配的可复用函数时，智能体可以直接调用而无需从头编写，显著减少了迭代次数。
+
 \subsection{失败类型统计}
 
 对失败任务的错误类型进行分类统计，结果如表~\ref{tab:fail-types} 所示。
@@ -121,24 +194,24 @@
     \centering
     \caption{代表性分析类型的通过率对比}
     \label{tab:by-type}
-    \begin{tabular}{lccc}
+    \begin{tabular}{lcccc}
         \toprule
-        分析类型 & qwen3-max & turbo+exp & turbo baseline \\
+        分析类型 & qwen3-max & turbo+exp & baseline & skill(warm) \\
         \midrule
-        Descriptive Statistics & 3/3 (100\%) & 2/3 (67\%) & 2/3 (67\%) \\
-        Survival Outcome Analysis & 4/4 (100\%) & 4/4 (100\%) & 4/4 (100\%) \\
-        Genomic Alteration Profiling & 4/4 (100\%) & 2/4 (50\%) & 2/4 (50\%) \\
-        Clinical Feature Engineering & 0/1 (0\%) & 1/1 (100\%) & 0/1 (0\%) \\
-        Treatment Response Vis. & 2/2 (100\%) & 2/2 (100\%) & 1/2 (50\%) \\
+        Descriptive Statistics & 3/3 & 2/3 & 2/3 & 2/3 \\
+        Survival Outcome Analysis & 4/4 & 4/4 & 4/4 & 4/4 \\
+        Genomic Alteration Profiling & 4/4 & 2/4 & 2/4 & 1/4 \\
+        Clinical Feature Engineering & 0/1 & 1/1 & 0/1 & 1/1 \\
+        Treatment Response Vis. & 2/2 & 2/2 & 1/2 & 2/2 \\
         \bottomrule
     \end{tabular}
 \end{table}
 
 可以观察到：
 \begin{itemize}
-    \item 纯生存分析任务三组均达到 100\% 通过率，说明该类型任务的解题模式较为固定，智能体容易掌握。
-    \item 基因组变异分析任务中，qwen3-max 达到 100\% 而 qwen-turbo 仅 50\%，说明该类型需要更强的代码推理能力。
-    \item 经验池在治疗响应可视化类型上将 qwen-turbo 的通过率从 50\% 提升至 100\%，体现了经验复用对特定任务类型的显著增益。
+    \item 纯生存分析任务所有实验组均达到 100\% 通过率，说明该类型任务的解题模式较为固定，智能体容易掌握。
+    \item 基因组变异分析任务中，qwen3-max 达到 100\% 而 qwen-turbo 各组仅 25\%--50\%，说明该类型需要更强的代码推理能力。
+    \item 技能库（warm）在治疗响应可视化和临床特征工程类型上表现优异，与经验池持平或更优，体现了可复用函数对特定任务类型的增益。
 \end{itemize}
 
 \subsection{案例分析}

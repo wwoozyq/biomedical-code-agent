@@ -6,7 +6,8 @@
 #   1. qwen3-max  + 经验池 + 反思  → benchmark_output_30/
 #   2. qwen-turbo + 经验池 + 反思  → benchmark_output_30_turbo/
 #   3. qwen-turbo + 无经验池/反思  → benchmark_output_30_turbo_no_exp/
-#   4. qwen-turbo + 经验池 + 反思 + 技能库 → benchmark_output_30_turbo_skill/
+#   4. qwen-turbo + 经验池 + 反思 + 技能库(冷启动) → benchmark_output_30_turbo_skill/
+#   5. qwen-turbo + 经验池 + 反思 + 技能库(预热)  → benchmark_output_30_turbo_skill_warm/
 #
 # 用法:
 #   chmod +x run_ablation_30.sh
@@ -155,8 +156,8 @@ echo "📊 生成消融实验对比报告..."
 echo "============================================================"
 
 python3 ablation_analysis.py \
-    --dirs "benchmark_output_30,benchmark_output_30_turbo,benchmark_output_30_turbo_no_exp,benchmark_output_30_turbo_skill" \
-    --names "qwen3-max (full),qwen-turbo + exp,qwen-turbo (baseline),qwen-turbo + skill" \
+    --dirs "benchmark_output_30,benchmark_output_30_turbo,benchmark_output_30_turbo_no_exp,benchmark_output_30_turbo_skill,benchmark_output_30_turbo_skill_warm" \
+    --names "qwen3-max (full),qwen-turbo + exp,qwen-turbo (baseline),qwen-turbo + skill (cold),qwen-turbo + skill (warm)" \
     --output ablation_report_30.md
 
 echo ""
