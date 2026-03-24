@@ -10,6 +10,7 @@ from collections import defaultdict
 from .biodsbench_loader import BioDSBenchLoader
 from ..agent.react_agent import ReActAgent
 from ..agent.experience_pool import ExperiencePool
+from ..agent.skill_library import SkillLibrary
 from ..llm.client import LLMClient
 
 
@@ -25,6 +26,7 @@ class BenchmarkRunner:
         enable_experience: bool = True,
         enable_reflection: bool = True,
         use_sandbox: bool = False,
+        enable_skills: bool = False,
     ):
         self.llm = llm_client
         self.loader = BioDSBenchLoader(data_root)
@@ -35,12 +37,19 @@ class BenchmarkRunner:
         self.enable_reflection = enable_reflection
         self.use_sandbox = use_sandbox
         self.experience_pool = None
+        self.skill_library = None
         if enable_experience:
             pool_path = self.output_dir / "experience_pool.json"
             self.experience_pool = ExperiencePool(str(pool_path))
             if self.verbose:
                 stats = self.experience_pool.get_stats()
                 print("📚 经验池: {} 条 ({} 成功)".format(stats["total"], stats["success"]))
+        if enable_skills:
+            skill_dir = self.output_dir / "skill_library"
+            self.skill_library = SkillLibrary(library_dir=str(skill_dir))
+            if self.verbose:
+                stats = self.skill_library.get_stats()
+                print("🛠️ 技能库: {} 个技能".format(stats["total_skills"]))
 
     def run_single_task(self, task_index: int) -> Dict[str, Any]:
         raw_task = self.loader.load_task_by_index(task_index)
@@ -93,6 +102,7 @@ class BenchmarkRunner:
             experience_pool=self.experience_pool,
             enable_reflection=self.enable_reflection,
             use_sandbox=self.use_sandbox,
+            skill_library=self.skill_library,
         )
         agent_result = agent.solve_task(query, prepared)
         passed, test_details = self._verify_test_cases(test_cases_str, agent.get_exec_namespace())

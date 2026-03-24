@@ -19,6 +19,7 @@ from enum import Enum
 
 from .action_space import ActionSpace, ActionType
 from .experience_pool import ExperiencePool, Experience, ReflectionEngine
+from .skill_library import SkillLibrary
 from .sandbox import Sandbox
 from ..llm.client import LLMClient
 
@@ -88,6 +89,7 @@ class ReActAgent:
         enable_reflection: bool = True,
         use_sandbox: bool = False,
         sandbox_timeout: int = 60,
+        skill_library: Optional[SkillLibrary] = None,
     ):
         self.llm = llm_client
         self.max_iterations = max_iterations
@@ -97,6 +99,7 @@ class ReActAgent:
         self.enable_reflection = enable_reflection
         self.reflection_engine = ReflectionEngine(llm_client) if enable_reflection else None
         self.use_sandbox = use_sandbox
+        self.skill_library = skill_library
 
         # 执行状态
         self.current_step = 0
@@ -326,6 +329,15 @@ class ReActAgent:
                     f"之前在类似任务中犯过的错: {lessons.reflection}"
                 )
 
+        # 技能注入：检索匹配的可复用函数
+        if self.skill_library:
+            matched_skills = self.skill_library.retrieve(
+                query=description, analysis_types=analysis_types, top_k=2
+            )
+            skill_text = self.skill_library.format_for_prompt(matched_skills)
+            if skill_text:
+                parts.append(skill_text)
+
         parts.append("请开始分析，先思考再写代码。")
         return "\n\n".join(parts)
 
@@ -497,6 +509,21 @@ class ReActAgent:
 
         if self.verbose and reflection_text:
             print(f"🔍 反思: {reflection_text[:200]}")
+
+        # 技能提取：成功任务 → 让 LLM 重构为可复用函数 → 存入技能库
+        if success and self.skill_library and final_code:
+            try:
+                skill = self.skill_library.extract_skill(
+                    llm_client=self.llm,
+                    code=final_code,
+                    query=query,
+                    task_id=qid,
+                    analysis_types=analysis_types,
+                )
+                if skill and self.verbose:
+                    print(f"🛠️ 技能提取: {skill.name} (调用链长度: {len(skill.call_chain)})")
+            except Exception:
+                pass  # 技能提取失败不影响主流程
 
     # ------------------------------------------------------------------
     # 结果生成

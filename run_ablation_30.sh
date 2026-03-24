@@ -6,13 +6,14 @@
 #   1. qwen3-max  + 经验池 + 反思  → benchmark_output_30/
 #   2. qwen-turbo + 经验池 + 反思  → benchmark_output_30_turbo/
 #   3. qwen-turbo + 无经验池/反思  → benchmark_output_30_turbo_no_exp/
+#   4. qwen-turbo + 经验池 + 反思 + 技能库 → benchmark_output_30_turbo_skill/
 #
 # 用法:
 #   chmod +x run_ablation_30.sh
 #   export DASHSCOPE_API_KEY='你的key'
 #   ./run_ablation_30.sh           # 跑全部（自动跳过已完成的题）
 #   ./run_ablation_30.sh --only 2  # 只跑第 2 组
-#   ./run_ablation_30.sh --only 3  # 只跑第 3 组
+#   ./run_ablation_30.sh --only 4  # 只跑第 4 组（技能库）
 #   ./run_ablation_30.sh --report  # 只生成报告，不跑实验
 # ============================================================
 
@@ -142,6 +143,10 @@ if [ "$REPORT_ONLY" = false ]; then
     if [ -z "$ONLY_GROUP" ] || [ "$ONLY_GROUP" = "3" ]; then
         run_experiment 3 "qwen-turbo" "./benchmark_output_30_turbo_no_exp" "--no-experience --no-reflection"
     fi
+
+    if [ -z "$ONLY_GROUP" ] || [ "$ONLY_GROUP" = "4" ]; then
+        run_experiment 4 "qwen-turbo" "./benchmark_output_30_turbo_skill" "--use-skills"
+    fi
 fi
 
 # ── Step 3: 生成对比报告 ──
@@ -150,8 +155,8 @@ echo "📊 生成消融实验对比报告..."
 echo "============================================================"
 
 python3 ablation_analysis.py \
-    --dirs "benchmark_output_30,benchmark_output_30_turbo,benchmark_output_30_turbo_no_exp" \
-    --names "qwen3-max (full),qwen-turbo + exp,qwen-turbo (baseline)" \
+    --dirs "benchmark_output_30,benchmark_output_30_turbo,benchmark_output_30_turbo_no_exp,benchmark_output_30_turbo_skill" \
+    --names "qwen3-max (full),qwen-turbo + exp,qwen-turbo (baseline),qwen-turbo + skill" \
     --output ablation_report_30.md
 
 echo ""
