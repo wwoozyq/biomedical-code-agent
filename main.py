@@ -4,11 +4,13 @@
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 import time
 
 from src.agent.react_agent import ReActAgent
+from src.llm.client import LLMClient
 from src.tasks.data_analysis import DataAnalysisTask
 from src.tasks.prediction import PredictionTask
 from src.tasks.sql_query import SQLQueryTask
@@ -77,6 +79,27 @@ def parse_arguments():
         default="./data",
         help="数据目录路径"
     )
+
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="LLM 模型名称，默认读取配置文件"
+    )
+
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default=None,
+        help="OpenAI 兼容 API base URL，默认读取配置文件"
+    )
+
+    parser.add_argument(
+        "--api-key",
+        type=str,
+        default=None,
+        help="API Key，也可通过 DASHSCOPE_API_KEY 环境变量提供"
+    )
     
     return parser.parse_args()
 
@@ -113,6 +136,7 @@ def main():
     """主函数"""
     # 解析参数
     args = parse_arguments()
+    config = load_config(args.config)
     
     # 设置日志
     logger = setup_logger(verbose=args.verbose)
@@ -134,7 +158,21 @@ def main():
     
     # 创建智能体
     logger.info(f"初始化智能体 (最大迭代次数: {args.max_iterations})")
+    llm_config = config.get("llm", {}) if isinstance(config, dict) else {}
+    api_key = args.api_key or os.environ.get("DASHSCOPE_API_KEY", "")
+    if not api_key:
+        logger.error("缺少 API Key，请设置 DASHSCOPE_API_KEY 或使用 --api-key")
+        return 1
+
+    llm_client = LLMClient(
+        api_key=api_key,
+        base_url=args.base_url or llm_config.get("base_url", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+        model=args.model or llm_config.get("model", "qwen-plus"),
+        temperature=llm_config.get("temperature", 0.0),
+        max_tokens=llm_config.get("max_tokens", 4096),
+    )
     agent = ReActAgent(
+        llm_client=llm_client,
         max_iterations=args.max_iterations,
         sandbox_dir=args.sandbox_dir,
         data_dir=args.data_dir,

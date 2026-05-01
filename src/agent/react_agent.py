@@ -253,31 +253,46 @@ class ReActAgent:
                         if self.verbose:
                             print(f"🧭 归因: {attribution.error_type} - {attribution.root_cause[:120]}")
 
-                # 6. LLM 说完成但验证没过 → 反馈继续
+                # 6. LLM 说完成：必须满足验证或至少本轮代码成功执行
                 if "任务完成" in thought or "任务已完成" in thought:
                     if test_cases and test_cases.strip():
-                        passed, detail = self._run_test_cases(test_cases)
-                        if passed:
+                        if validation_detail:
                             if self.verbose:
-                                print(f"🎉 验证通过: {detail}")
-                            self.state = AgentState.COMPLETED
-                            self._post_task_reflection(success=True)
-                            break
-                        else:
-                            if self.verbose:
-                                print(f"⚠️ 验证失败: {detail}")
+                                print(f"⚠️ 验证失败: {validation_detail}")
+                            attribution_block = f"\n\n{attribution_text}" if attribution_text else ""
                             feedback = (
                                 f"Observation:\n{obs_text}\n\n"
-                                f"⚠️ 自动验证未通过:\n{detail}\n\n"
+                                f"⚠️ 自动验证未通过:\n{validation_detail}{attribution_block}\n\n"
                                 f"请仔细分析失败原因，修正代码。注意对比期望值和实际值。"
                             )
                             self.messages.append({"role": "user", "content": feedback})
                             self.current_step += 1
                             continue
+                        if observation.get("success"):
+                            self.state = AgentState.COMPLETED
+                            self._post_task_reflection(success=True)
+                            break
+                        attribution_block = f"\n\n{attribution_text}" if attribution_text else ""
+                        feedback = (
+                            f"Observation:\n{obs_text}{attribution_block}\n\n"
+                            "你声明了任务完成，但代码执行失败，不能结束。请先修复运行错误。"
+                        )
+                        self.messages.append({"role": "user", "content": feedback})
+                        self.current_step += 1
+                        continue
                     else:
-                        self.state = AgentState.COMPLETED
-                        self._post_task_reflection(success=True)
-                        break
+                        if observation.get("success"):
+                            self.state = AgentState.COMPLETED
+                            self._post_task_reflection(success=True)
+                            break
+                        attribution_block = f"\n\n{attribution_text}" if attribution_text else ""
+                        feedback = (
+                            f"Observation:\n{obs_text}{attribution_block}\n\n"
+                            "你声明了任务完成，但本轮代码执行失败。没有测试用例时也必须至少保证代码成功运行。"
+                        )
+                        self.messages.append({"role": "user", "content": feedback})
+                        self.current_step += 1
+                        continue
 
                 # 7. 渐进式提示：根据步骤阶段调整反馈
                 nudge = self._get_progressive_nudge()

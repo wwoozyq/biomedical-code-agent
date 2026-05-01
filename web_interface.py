@@ -3,6 +3,7 @@
 """
 
 import streamlit as st
+import os
 import json
 import pandas as pd
 import plotly.express as px
@@ -15,6 +16,7 @@ from datetime import datetime
 import base64
 
 from src.agent.react_agent import ReActAgent
+from src.llm.client import LLMClient
 from src.multi_agent.coordinator import MultiAgentCoordinator
 from src.tasks.data_analysis import DataAnalysisTask
 from src.tasks.prediction import PredictionTask
@@ -541,6 +543,21 @@ def main():
         
         # 高级配置
         with st.expander("🔧 高级配置", expanded=False):
+            api_key = st.text_input(
+                "API Key",
+                type="password",
+                value=os.environ.get("DASHSCOPE_API_KEY", ""),
+                help="也可以通过环境变量 DASHSCOPE_API_KEY 提供"
+            )
+            model = st.selectbox(
+                "模型",
+                ["qwen3-max", "qwen-plus", "qwen-turbo", "qwen-turbo-latest", "qwen3.5-27b"],
+                index=0
+            )
+            base_url = st.text_input(
+                "API Base URL",
+                value="https://dashscope.aliyuncs.com/compatible-mode/v1"
+            )
             max_iterations = st.slider(
                 "最大迭代次数", 
                 min_value=1, 
@@ -784,7 +801,16 @@ def main():
                 status_placeholder.text("🤖 正在初始化智能体...")
                 
                 if agent_type == "single_agent":
+                    if not api_key:
+                        st.error("请先在高级配置中填写 API Key，或设置 DASHSCOPE_API_KEY 环境变量")
+                        st.stop()
+                    llm_client = LLMClient(
+                        api_key=api_key,
+                        base_url=base_url,
+                        model=model,
+                    )
                     agent = ReActAgent(
+                        llm_client=llm_client,
                         max_iterations=max_iterations,
                         verbose=verbose
                     )
