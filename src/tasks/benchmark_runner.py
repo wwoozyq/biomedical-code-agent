@@ -27,6 +27,7 @@ class BenchmarkRunner:
         enable_reflection: bool = True,
         use_sandbox: bool = False,
         enable_skills: bool = False,
+        enable_attribution: bool = False,
     ):
         self.llm = llm_client
         self.loader = BioDSBenchLoader(data_root)
@@ -35,6 +36,7 @@ class BenchmarkRunner:
         self.max_iterations = max_iterations
         self.verbose = verbose
         self.enable_reflection = enable_reflection
+        self.enable_attribution = enable_attribution
         self.use_sandbox = use_sandbox
         self.experience_pool = None
         self.skill_library = None
@@ -103,6 +105,7 @@ class BenchmarkRunner:
             enable_reflection=self.enable_reflection,
             use_sandbox=self.use_sandbox,
             skill_library=self.skill_library,
+            enable_attribution=self.enable_attribution,
         )
         agent_result = agent.solve_task(query, prepared)
         passed, test_details = self._verify_test_cases(test_cases_str, agent.get_exec_namespace())

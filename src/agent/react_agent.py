@@ -21,6 +21,7 @@ from .action_space import ActionSpace, ActionType
 from .experience_pool import ExperiencePool, Experience, ReflectionEngine
 from .skill_library import SkillLibrary
 from .sandbox import Sandbox
+from .attribution_agent import AttributionAgent, AttributionResult
 from ..llm.client import LLMClient
 
 
@@ -90,6 +91,8 @@ class ReActAgent:
         use_sandbox: bool = False,
         sandbox_timeout: int = 60,
         skill_library: Optional[SkillLibrary] = None,
+        enable_attribution: bool = True,
+        attribution_agent: Optional[AttributionAgent] = None,
     ):
         self.llm = llm_client
         self.max_iterations = max_iterations
@@ -100,6 +103,14 @@ class ReActAgent:
         self.reflection_engine = ReflectionEngine(llm_client) if enable_reflection else None
         self.use_sandbox = use_sandbox
         self.skill_library = skill_library
+        self.enable_attribution = enable_attribution
+        self.attribution_agent = (
+            attribution_agent
+            if attribution_agent is not None
+            else AttributionAgent(llm_client, use_llm=True)
+            if enable_attribution
+            else None
+        )
 
         # 执行状态
         self.current_step = 0
@@ -144,6 +155,9 @@ class ReActAgent:
             {"role": "user", "content": self._build_task_prompt(task_description, task_data)},
         ]
 
+        # 标记是否已注入过技能（只在第一次成功执行后注入一次）
+        self._skill_injected = False
+
         # 主循环
         while (
             self.current_step < self.max_iterations
@@ -184,8 +198,39 @@ class ReActAgent:
                 obs_text = self._format_observation(observation)
                 self.messages.append({"role": "assistant", "content": llm_reply})
 
+                # 4.5 AST 技能检索：第一步成功执行后，用已执行代码做 AST 匹配
+                if (
+                    not self._skill_injected
+                    and self.skill_library
+                    and observation.get("success")
+                    and code
+                ):
+                    # 收集已执行的所有代码
+                    all_code = "\n".join(
+                        s.action_params.get("code", "")
+                        for s in self.execution_trace
+                        if s.action_params and s.observation and s.observation.get("success")
+                    )
+                    if all_code.strip():
+                        matched_skills = self.skill_library.retrieve(
+                            code=all_code,
+                            query=self.task_context.get("description", ""),
+                            analysis_types=self.task_context["data"].get("analysis_types", ""),
+                            top_k=2,
+                        )
+                        skill_text = self.skill_library.format_for_prompt(matched_skills)
+                        if skill_text:
+                            self.messages.append({
+                                "role": "user",
+                                "content": f"💡 根据你已执行的代码，以下技能函数可能有帮助：\n\n{skill_text}",
+                            })
+                            self._skill_injected = True
+                            if self.verbose:
+                                print(f"🛠️ AST 技能注入: {[s.name for s in matched_skills]}")
+
                 # 5. 主动验证：每步执行成功后都跑 test_cases
                 test_cases = self.task_context["data"].get("test_cases", "")
+                validation_detail = ""
                 if observation.get("success") and test_cases and test_cases.strip():
                     passed, detail = self._run_test_cases(test_cases)
                     if passed:
@@ -194,6 +239,19 @@ class ReActAgent:
                         self.state = AgentState.COMPLETED
                         self._post_task_reflection(success=True)
                         break
+                    validation_detail = detail
+                    observation["validation_failed"] = detail
+                    if self.verbose:
+                        print(f"⚠️ 自动验证未通过: {detail[:300]}")
+
+                attribution_text = ""
+                if observation.get("error") or validation_detail:
+                    attribution = self._attribute_failure(code, observation, validation_detail)
+                    if attribution is not None:
+                        observation["attribution"] = attribution.to_dict()
+                        attribution_text = self.attribution_agent.format_for_prompt(attribution)
+                        if self.verbose:
+                            print(f"🧭 归因: {attribution.error_type} - {attribution.root_cause[:120]}")
 
                 # 6. LLM 说完成但验证没过 → 反馈继续
                 if "任务完成" in thought or "任务已完成" in thought:
@@ -223,9 +281,13 @@ class ReActAgent:
 
                 # 7. 渐进式提示：根据步骤阶段调整反馈
                 nudge = self._get_progressive_nudge()
+                validation_text = ""
+                if validation_detail:
+                    validation_text = f"\n\n⚠️ 自动验证未通过:\n{validation_detail}"
+                attribution_block = f"\n\n{attribution_text}" if attribution_text else ""
                 self.messages.append({
                     "role": "user",
-                    "content": f"Observation:\n{obs_text}\n\n{nudge}",
+                    "content": f"Observation:\n{obs_text}{validation_text}{attribution_block}\n\n{nudge}",
                 })
                 self.current_step += 1
 
@@ -449,6 +511,32 @@ class ReActAgent:
             parts.append("代码执行成功，无输出。")
         return "\n".join(parts)
 
+    def _attribute_failure(
+        self,
+        code: str,
+        observation: Dict[str, Any],
+        validation_detail: str = "",
+    ) -> Optional[AttributionResult]:
+        """Call the attribution sub-agent on execution or validation failure."""
+        if not self.attribution_agent:
+            return None
+        history = []
+        for step in self.execution_trace[-3:]:
+            history.append({
+                "step_id": step.step_id,
+                "thought": step.thought,
+                "success": step.observation.get("success", False) if step.observation else False,
+                "error": step.observation.get("error", "") if step.observation else "",
+            })
+        return self.attribution_agent.analyze(
+            task_description=self.task_context.get("description", ""),
+            code=code,
+            observation=observation,
+            test_detail=validation_detail,
+            history=history,
+            task_data=self.task_context.get("data", {}),
+        )
+
     # ------------------------------------------------------------------
     # 反思 & 经验存储
     # ------------------------------------------------------------------
@@ -546,6 +634,8 @@ class ReActAgent:
                     "success": s.observation.get("success", False) if s.observation else False,
                     "stdout": s.observation.get("stdout", "") if s.observation else "",
                     "error": s.observation.get("error", "") if s.observation else "",
+                    "validation_failed": s.observation.get("validation_failed", "") if s.observation else "",
+                    "attribution": s.observation.get("attribution", {}) if s.observation else {},
                     "timestamp": s.timestamp,
                 }
                 for s in self.execution_trace

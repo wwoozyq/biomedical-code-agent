@@ -107,6 +107,9 @@ python3 run_benchmark.py --model qwen-turbo --start 0 --end 30
 
 # 启用安全沙箱
 python3 run_benchmark.py --model qwen-turbo --sandbox
+
+# 启用技能库和归因子智能体
+python3 run_benchmark.py --model qwen-turbo --use-skills --attribution
 ```
 
 ### 消融实验（30 题）
@@ -115,7 +118,7 @@ python3 run_benchmark.py --model qwen-turbo --sandbox
 # 设置 API Key
 export DASHSCOPE_API_KEY="your-key"
 
-# 运行三组消融实验（支持断点续跑）
+# 运行消融实验（支持断点续跑，含 ReAct / Attribution / Memory / Skills / Full System）
 chmod +x run_ablation_30.sh
 ./run_ablation_30.sh
 

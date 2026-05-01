@@ -43,6 +43,7 @@ def main():
     parser.add_argument("--quiet", action="store_true", help="减少输出")
     parser.add_argument("--sandbox", action="store_true", help="启用安全沙箱（子进程隔离执行代码）")
     parser.add_argument("--use-skills", action="store_true", help="启用技能库（AST 调用链检索 + 技能提取）")
+    parser.add_argument("--attribution", action="store_true", help="启用归因子智能体")
     args = parser.parse_args()
 
     # 初始化 LLM
@@ -64,6 +65,7 @@ def main():
         enable_reflection=not args.no_reflection,
         use_sandbox=args.sandbox,
         enable_skills=args.use_skills,
+        enable_attribution=args.attribution,
     )
 
     if args.task_index is not None:

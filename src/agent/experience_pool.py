@@ -234,13 +234,16 @@ class ExperiencePool:
                         continue
                     candidates.append(exp)
 
-        # 按关键词重叠度排序
+        # 按关键词重叠度 + recency 排序
         def score(exp: Experience) -> float:
             exp_keywords = set(self._extract_keywords(exp.query))
             exp_types = set(self._parse_types(exp.analysis_types))
             type_overlap = len(target_types & exp_types)
             keyword_overlap = len(query_keywords & exp_keywords)
-            return type_overlap * 10 + keyword_overlap
+            # recency: 越新的经验权重越高（指数衰减，半衰期 30 条经验）
+            age = len(self.experiences) - self.experiences.index(exp)
+            recency = 0.5 ** (age / 30.0)
+            return type_overlap * 10 + keyword_overlap + recency * 3
 
         candidates.sort(key=score, reverse=True)
         return candidates[:top_k]
@@ -249,10 +252,23 @@ class ExperiencePool:
         self, analysis_types: str, top_k: int = 2
     ) -> List[Experience]:
         """检索相关的失败经验（用于避免重复犯错）"""
-        return self.retrieve(
-            query="", analysis_types=analysis_types,
-            top_k=top_k, success_only=False,
-        )
+        target_types = set(self._parse_types(analysis_types))
+
+        # 只从失败经验中检索
+        failures = [e for e in self.experiences if not e.success and e.reflection]
+        if not failures:
+            return []
+
+        # 按 type 匹配排序
+        def score(exp: Experience) -> float:
+            exp_types = set(self._parse_types(exp.analysis_types))
+            type_overlap = len(target_types & exp_types)
+            # 越新的失败经验越有参考价值
+            recency = exp.timestamp / (time.time() + 1)
+            return type_overlap * 10 + recency
+
+        failures.sort(key=score, reverse=True)
+        return failures[:top_k]
 
     def get_stats(self) -> Dict[str, Any]:
         """经验池统计"""

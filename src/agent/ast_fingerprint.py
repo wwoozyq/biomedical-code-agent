@@ -84,6 +84,15 @@ _NORMALIZE_MAP = {
 class CallChainExtractor(ast.NodeVisitor):
     """遍历 AST，按代码执行顺序提取方法调用（内层调用先于外层）"""
 
+    # 过滤掉对相似度匹配无意义的通用函数
+    _SKIP_NAMES = {
+        "print", "len", "range", "enumerate", "zip", "list", "dict",
+        "set", "tuple", "int", "float", "str", "bool", "type",
+        "isinstance", "hasattr", "getattr", "setattr", "sorted",
+        "min", "max", "abs", "round", "sum", "any", "all", "open",
+        "format", "super", "__init__",
+    }
+
     def __init__(self):
         self.calls: List[str] = []
 
@@ -92,7 +101,7 @@ class CallChainExtractor(ast.NodeVisitor):
         self.generic_visit(node)
         # 再记录当前调用（保证执行顺序：内层先）
         name = self._resolve_call_name(node.func)
-        if name:
+        if name and name not in self._SKIP_NAMES:
             normalized = _NORMALIZE_MAP.get(name, name)
             self.calls.append(normalized)
 
